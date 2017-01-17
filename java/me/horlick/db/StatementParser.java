@@ -1,5 +1,7 @@
 package me.horlick.db;
 
+import static java.util.stream.Collectors.joining;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import java.util.ArrayList;
@@ -11,15 +13,13 @@ import java.util.Set;
 // A StatementParser takes a Statement and replaces all placeholders with the correct values.
 public class StatementParser {
 
-  private static final SqlTypeAdapter sqlTypeAdapter = new SqlTypeAdapter();
-
   private enum ParseState {
     TEXT,
     PLACEHOLDER
   }
 
   interface Token {
-    String get(Map<String, Object> variables);
+    String get(Map<String, Object> variables, List<Object> values);
   }
 
   // A string of SQL.
@@ -36,7 +36,7 @@ public class StatementParser {
     }
 
     @Override
-    public String get(Map<String, Object> variables) {
+    public String get(Map<String, Object> variables, List<Object> values) {
       return token;
     }
 
@@ -97,18 +97,72 @@ public class StatementParser {
     }
 
     @Override
-    public String get(Map<String, Object> variables) {
+    public String get(Map<String, Object> variables, List<Object> values) {
       Object value = variables.get(variableName);
       if (value == null) {
         throw new RuntimeException(
             "Variable '" + variableName + "' not resolved at character " + offset);
       }
 
-      return sqlTypeAdapter.adapt(value);
+      values.add(value);
+
+      // Substitute the named placeholder with the JDBC-style question mark placeholder.
+      return "?";
     }
 
     String getVariableName() {
       return variableName;
+    }
+  }
+
+  static class ParsedStatement {
+    private final String sql;
+    private final List<Object> values;
+
+    @Override
+    public String toString() {
+      return "ParsedStatement{"
+          + "sql='"
+          + sql
+          + '\''
+          + ", values=["
+          + values.stream().map(Object::toString).collect(joining(","))
+          + "]"
+          + '}';
+    }
+
+    ParsedStatement(String sql, List<Object> values) {
+      this.sql = sql;
+      this.values = values;
+    }
+
+    public String getSql() {
+      return sql;
+    }
+
+    public List<Object> getValues() {
+      return values;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      ParsedStatement that = (ParsedStatement) o;
+
+      return sql.equals(that.sql) && values.equals(that.values);
+    }
+
+    @Override
+    public int hashCode() {
+      int result = sql.hashCode();
+      result = 31 * result + values.hashCode();
+      return result;
     }
   }
 
@@ -118,18 +172,19 @@ public class StatementParser {
    * @param statement An SQL statement template and variables to bind.
    * @return The raw SQL string to be executed on a database.
    */
-  String parse(final Statement statement) {
+  ParsedStatement parse(final Statement statement) {
     List<Token> tokens = tokenise(statement.getSql());
 
     String result = "";
+    List<Object> values = new ArrayList<>();
     for (Token token : tokens) {
-      result += token.get(statement.getVariables());
+      result += token.get(statement.getVariables(), values);
     }
 
     // Throw an exception if there are variables that have been provided, but not used.
     checkAllVariablesAreUsed(statement, tokens);
 
-    return result;
+    return new ParsedStatement(result, values);
   }
 
   // Ensure all variables supplied in the Statement are used in the query.
@@ -167,6 +222,11 @@ public class StatementParser {
   // Take an input SQL string and determine which parts are raw SQL and which parts are variable placeholders.
   @VisibleForTesting
   List<Token> tokenise(String input) {
+    // First check there are no question mark placeholders in the SQL text. This could lead to injection attacks, and isn't correct anyway.
+    if (input.contains("?")) {
+      throw new IllegalArgumentException("SQL must not contain question marks");
+    }
+
     ParseState state = ParseState.TEXT;
 
     // The current token that is being parsed.

@@ -3,11 +3,13 @@ package me.horlick.db;
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.fail;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import me.horlick.db.StatementParser.ParsedStatement;
 import me.horlick.db.StatementParser.SqlText;
 import me.horlick.db.StatementParser.SqlVariable;
 import me.horlick.db.StatementParser.Token;
@@ -20,7 +22,8 @@ public class StatementParserTest {
   @Test
   public void shouldReturnOriginalSqlIfNoVariables() {
     Statement statement = new Statement("SELECT * FROM shapes", Collections.emptyMap());
-    assertEquals(statement.getSql(), parser.parse(statement));
+    assertEquals(
+        new ParsedStatement(statement.getSql(), new ArrayList<>()), parser.parse(statement));
   }
 
   @Test
@@ -74,7 +77,9 @@ public class StatementParserTest {
 
     Statement statement = new Statement("INSERT INTO shapes (sides) VALUES (:sides)", variables);
 
-    assertEquals("INSERT INTO shapes (sides) VALUES (3)", parser.parse(statement));
+    assertEquals(
+        new ParsedStatement("INSERT INTO shapes (sides) VALUES (?)", Arrays.asList(3)),
+        parser.parse(statement));
   }
 
   @Test
@@ -84,7 +89,9 @@ public class StatementParserTest {
 
     Statement statement = new Statement("INSERT INTO shapes (sides) VALUES (:sides)", variables);
 
-    assertEquals("INSERT INTO shapes (sides) VALUES ('3')", parser.parse(statement));
+    assertEquals(
+        new ParsedStatement("INSERT INTO shapes (sides) VALUES (?)", Arrays.asList("3")),
+        parser.parse(statement));
   }
 
   @Test
@@ -100,7 +107,9 @@ public class StatementParserTest {
             variables);
 
     assertEquals(
-        "INSERT INTO shapes (sides,regular,convex) VALUES ('3',FALSE,TRUE)",
+        new ParsedStatement(
+            "INSERT INTO shapes (sides,regular,convex) VALUES (?,?,?)",
+            Arrays.asList("3", false, true)),
         parser.parse(statement));
   }
 

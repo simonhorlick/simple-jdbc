@@ -1,5 +1,6 @@
 package me.horlick.db;
 
+import com.google.errorprone.annotations.CompileTimeConstant;
 import java.util.Map;
 
 // An SQL statement containing zero or more placeholders and a map of placeholder names to values that is used for the substitution. The format of a placeholder is a comma followed by alphanumeric characters or underscores, for example:
@@ -8,7 +9,7 @@ import java.util.Map;
 // The StatementParser does the actual binding of variables to placeholders in the SQL statement.
 //
 // SQL statements should always be compile-time constant to ensure no possibility of SQL injection.
-class Statement {
+public class Statement {
 
   private final String sql;
   private final Map<String, Object> variables;
@@ -19,7 +20,7 @@ class Statement {
    * @param sql A compile-time constant that holds an SQL statement and zero or more placeholders.
    * @param variables The values of the placeholders to substitute into the SQL statement.
    */
-  Statement(String sql, Map<String, Object> variables) {
+  public Statement(@CompileTimeConstant final String sql, Map<String, Object> variables) {
     this.sql = sql;
     this.variables = variables;
   }

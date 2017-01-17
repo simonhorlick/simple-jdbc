@@ -8,8 +8,13 @@ import java.util.Properties;
 
 public class DatabaseClientFactory {
 
-  public DatabaseClient create(HostAndPort hostAndPort) {
+  private final HostAndPort hostAndPort;
 
+  public DatabaseClientFactory(HostAndPort hostAndPort) {
+    this.hostAndPort = hostAndPort;
+  }
+
+  public DatabaseClient create() {
     String url = "jdbc:postgresql://" + hostAndPort.getHost() + ":" + hostAndPort.getPort() + "/";
 
     Properties props = new Properties();

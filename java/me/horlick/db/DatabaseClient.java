@@ -1,11 +1,16 @@
 package me.horlick.db;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import me.horlick.db.StatementParser.ParsedStatement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // A DatabaseClient handles communication with the database. It sends queries for execution and
 // allows clients to begin transactions.
@@ -13,6 +18,8 @@ public class DatabaseClient implements AutoCloseable {
 
   private final Connection connection;
   private final StatementParser parser = new StatementParser();
+
+  private static final Logger logger = LoggerFactory.getLogger(DatabaseClient.class);
 
   DatabaseClient(Connection connection) {
     this.connection = connection;
@@ -24,19 +31,26 @@ public class DatabaseClient implements AutoCloseable {
    * @param statement The SQL statement and any variables to be bound.
    * @return A Cursor to the result set if any data is returned, or an empty Cursor if no results.
    */
-  Cursor executeStatement(Statement statement) {
+  public Cursor executeStatement(Statement statement) {
     try {
-      String sql = parser.parse(statement);
-      System.out.println("Running \"" + sql + "\"");
+      ParsedStatement parsedStatement = parser.parse(statement);
+      logger.info("Running \"" + parsedStatement + "\"");
 
-      java.sql.Statement stmt = connection.createStatement();
-      boolean hasResultSet = stmt.execute(sql);
+      // Build the prepared statement and set all of the variables.
+      PreparedStatement preparedStatement = connection.prepareStatement(parsedStatement.getSql());
+      List<Object> values = parsedStatement.getValues();
+      for (int i = 0; i < values.size(); i++) {
+        Object value = values.get(i);
+        preparedStatement.setObject(i + 1, value);
+      }
+
+      boolean hasResultSet = preparedStatement.execute();
 
       // If the execution produced a ResultSet then wrap it in a Cursor and return it.
       if (!hasResultSet) {
         return new EmptyCursor();
       } else {
-        ResultSet rs = stmt.getResultSet();
+        ResultSet rs = preparedStatement.getResultSet();
         ResultSetMetaData md = rs.getMetaData();
 
         // Extract the names of all columns.
@@ -55,7 +69,7 @@ public class DatabaseClient implements AutoCloseable {
     }
   }
 
-  DatabaseTransaction begin() {
+  public DatabaseTransaction begin() {
     return new DatabaseTransaction(this);
   }
 

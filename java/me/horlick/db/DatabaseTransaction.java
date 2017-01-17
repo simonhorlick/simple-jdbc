@@ -16,12 +16,12 @@ public class DatabaseTransaction implements AutoCloseable {
    *
    * @param statement
    */
-  void execute(Statement statement) {
+  public void execute(Statement statement) {
     client.executeStatement(statement);
   }
 
   // Atomically execute all statements in this transaction. This method should only be called once.
-  synchronized void commit() {
+  public synchronized void commit() {
     committed = true;
     client.commit();
   }
